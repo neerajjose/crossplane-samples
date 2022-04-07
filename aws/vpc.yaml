@@ -1,0 +1,164 @@
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: VPC
+metadata:
+  name: crossplane-vpc
+spec:
+  forProvider:
+    region: eu-west-1
+    cidrBlock: 10.25.0.0/16
+    enableDnsSupport: true
+    enableDnsHostNames: true
+    tags:
+    - key: Owner
+      value: nj
+    - key: Name
+      value: crossplane-vpc
+    instanceTenancy: default
+  providerConfigRef:
+    name: awsconfig
+---
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: Subnet
+metadata:
+  name: crossplane-pub-subnet-1
+spec:
+  forProvider:
+    region: eu-west-1
+    availabilityZone: eu-west-1a
+    cidrBlock: 10.25.1.0/24
+    vpcIdRef:
+      name: crossplane-vpc
+    tags:
+    - key: Name
+      value: crossplane-pub-subnet-1
+    - key: Owner
+      value: nj
+    mapPublicIPOnLaunch: true
+  providerConfigRef:
+    name: awsconfig
+---
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: Subnet
+metadata:
+  name: crossplane-pvt-subnet-1
+spec:
+  forProvider:
+    region: eu-west-1
+    availabilityZone: eu-west-1b
+    cidrBlock: 10.25.2.0/24
+    vpcIdRef:
+      name: crossplane-vpc
+    tags:
+    - key: Name
+      value: crossplane-pvt-subnet-1
+    - key: Owner
+      value: nj
+    mapPublicIPOnLaunch: false
+  providerConfigRef:
+    name: awsconfig
+---
+
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: InternetGateway
+metadata:
+  name: crossplane-igw
+spec:
+  forProvider:
+    region: eu-west-1
+    vpcIdRef:
+      name: crossplane-vpc
+    tags:
+    - key: Name
+      value: crossplane-igw
+    - key: Owner
+      value: nj
+
+  providerConfigRef:
+    name: awsconfig
+---
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: Address
+metadata:
+  name: nat-elastic-ip
+  labels:
+    name: nat-elastic-ip
+spec:
+  forProvider:
+    region: eu-west-1
+    tags:
+      - key: Name
+        value: nat-elastic-ip
+      - key: Owner
+        value: nj
+  providerConfigRef:
+    name: awsconfig
+---
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: NATGateway
+metadata:
+  name: crossplane-nat
+spec:
+  forProvider:
+    region: eu-west-1
+    connectivityType: public
+    allocationIdSelector:
+      matchLabels:
+        name: nat-elastic-ip
+    subnetIdRef:
+      name: crossplane-pub-subnet-1
+    tags:
+    - key: Name
+      value: crossplane-nat
+    - key: Owner
+      value: nj
+  providerConfigRef:
+    name: awsconfig
+--- 
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: RouteTable
+metadata:
+  name: crossplane-pub-rt
+spec:
+  forProvider:
+    region: eu-west-1
+    routes:
+      - destinationCidrBlock: 0.0.0.0/0
+        gatewayIdRef:
+          name: crossplane-igw
+    associations:
+      - subnetIdRef:
+          name: crossplane-pub-subnet-1
+    vpcIdRef:
+      name: crossplane-vpc
+    tags:
+    - key: Name
+      value: crossplane-pub-route
+    - key: Owner
+      value: nj
+  providerConfigRef:
+    name: awsconfig
+--- 
+apiVersion: ec2.aws.crossplane.io/v1beta1
+kind: RouteTable
+metadata:
+  name: crossplane-pvt-rt
+spec:
+  forProvider:
+    region: eu-west-1
+    routes:
+      - destinationCidrBlock: 0.0.0.0/0
+        natGatewayIdRef:
+          name: crossplane-nat
+    associations:
+      - subnetIdRef:
+          name: crossplane-pvt-subnet-1
+    vpcIdRef:
+      name: crossplane-vpc
+    tags:
+    - key: Name
+      value: crossplane-pvt-route
+    - key: Owner
+      value: nj
+  providerConfigRef:
+    name: awsconfig
+# https://github.com/cterence/crossplane-eks/blob/999052dd1bb96c77d0f2d93660a99f37847a5ad8/resources/nat-gateways.yaml
